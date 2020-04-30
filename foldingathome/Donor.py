@@ -3,36 +3,17 @@ import requests
 
 class Donor:
     def __init__(self, donorname, team=0):
-        r = requests.get(f"https://stats.foldingathome.org/api/team/{team}")
-        self.team = r.json()
+        r = requests.get(f"https://api.foldingathome.org/user/{donorname}")
+        if r.status_code == 200:
+            self.donor = r.json()
+        else:
+            raise Exception(f"No user found with name: {donorname}")
 
-        donors = self.team["donors"]
-        found = False
-        for donor in donors:
-            if donor["name"] == str(donorname):
-                self.donor = donor
-                found = True
-        if not found and team == 0:
-            raise Exception(
-                f"\n\nNo user could be found with that name: {donorname}.\n This could be due to the user not being on the leaderboard for the default team, as the api only displays the top 1000 members of a team."
-            )
-        elif not found:
-            raise Exception(f"\n\nNo user could be found with that name: {donorname}")
 
         self.name = self.donor["name"]
         self.id = self.donor["id"]
-        self.score = self.donor["credit"]
+        self.score = self.donor["score"]
         self.work_units = self.donor["wus"]
-        self.team_id = self.team["team"]
-
-    @property
-    def rank(self):
-        donors = self.team["donors"]
-        scores = []
-        order = []
-        for donor in donors:
-            scores.append(donor["credit"])
-        for i in scores:
-            order.append(max(scores))
-            scores.pop(scores.index(max(scores)))
-        return order.index(self.donor["credit"]) + 1
+        self.rank = self.donor.get("rank", -1)
+        self.all_users = self.donor["users"]
+        self.relative_rank = self.rank / self.all_users
