@@ -12,7 +12,7 @@ class Project:
             self.project = proj_req.json()
         else:
             raise Exception(f"No project found with id: {project_id}")
-        self.id = str(project_id)
+        self.id = project_id
         self.manager = self.project["manager"]
         self.institution = self.project["institution"]
         self.cause = self._define_cause(self.project["cause"])
@@ -30,10 +30,11 @@ class Project:
             # alias ranges like "14799-14850"
             if "-" in alias:
                 alias_parts = alias.split("-")
-                expanded_aliasrange = list(range(int(alias_parts[0]), int(alias_parts[1])))
+                expanded_aliasrange = list(range(int(alias_parts[0]), int(alias_parts[1]) + 1))
                 alias_list.extend(expanded_aliasrange)
             else:
                 alias_list.append(alias)
+        alias_list.append(self.id)
         return list(set(alias_list))
 
     def _define_cause (self, original_cause):
@@ -49,18 +50,22 @@ class Project:
         description = description.split(" ")[:100]
         return (" ").join(description)
 
-    def add_prcg (self, project_id, run, clone, generation):
+    def add_prcg (self, project_id, run = None, clone = None, generation = None):
         try:
-            prcg = PRCG(project_id, run, clone, generation)
-            if (prcg):
+            if not (isinstance(project_id,PRCG)):
+                prcg = PRCG(project_id, run, clone, generation)
+            else:
+                prcg = project_id
+            existing_prcg_ids = [e_prcg.get_id() for e_prcg in self.prcgs]
+            if prcg and prcg.get_id() not in existing_prcg_ids:
                 self.prcgs.append(prcg)
         except:
-            pass
+            raise
 
-    def get_credits (self):
+    def get_credits (self, fah_username):
         total_credits = 0
         for prcg in self.prcgs:
-            total_credits += prcg.credit
+            total_credits += prcg.get_credit_for_user(fah_username)
         return total_credits
 
 
@@ -75,7 +80,7 @@ class Project:
 
     def get_active_aliases (self):
         """define an alias project the user has worked on """
-        return self.active_alias_projects
+        return list(set(self.active_alias_projects))
 
 class PRCG:
     def __init__(self, project,run, clone, generation):
@@ -98,25 +103,28 @@ class PRCG:
                 return True
         return False
 
+
     def get_credit_for_user (self, fah_username):
         for entry in self.prcg_data:
             if entry["user"] == fah_username:
                 return entry.get("credit",0)
+        return 0
 
     def get_id(self):
         id_list = [self.project,self.run, self.clone, self.generation]
         str_list = [str(id) for id in id_list]
         return f"PRCG ({', '.join(str_list)})"
 
-    def get_calculation_dates_for_user (self, fah_username):
+    def get_calculation_dates_for_user (self, fah_username = None):
         for entry in self.prcg_data:
             if entry["user"] == fah_username:
                 assign_time = datetime.datetime.strptime(entry["assign_time"], '%Y-%m-%d %H:%M:%S')
                 credit_time = datetime.datetime.strptime(entry["credit_time"], '%Y-%m-%d %H:%M:%S')
 
                 return {
-                    "assign_time": assign_time ,
+                    "assign_time": assign_time,
                     "credit_time": credit_time,
+                    "calculation_days": entry["days"],
                     "calculation_time": credit_time - assign_time
                 }
                 
@@ -143,10 +151,10 @@ class Projects:
         self.projects.append(project)
         return project
 
-    def get_credits (self):
+    def get_credits_for_user (self, fah_username):
         total_credits = 0
         for project in self.projects:
-            total_credits += project.get_credits()
+            total_credits += project.get_credits(fah_username)
         return total_credits
 
     def get_projects_by_cause (self):
